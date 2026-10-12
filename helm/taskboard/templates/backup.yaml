@@ -1,0 +1,59 @@
+{{- if .Values.backup.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "tb.name" . }}-backups
+  labels:
+    {{- include "tb.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: {{ .Values.backup.storage }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "tb.name" . }}-pgdump
+  labels:
+    {{- include "tb.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsUser: 70        # postgres user in the alpine image
+            fsGroup: 70
+          containers:
+            - name: pgdump
+              image: {{ .Values.backup.image }}
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.database.existingSecret }}
+                      key: {{ .Values.database.secretKey }}
+              command:
+                - sh
+                - -c
+                - |
+                  set -eu
+                  f=/backups/taskboard-$(date +%Y%m%d-%H%M%S).sql
+                  pg_dump "$DATABASE_URL" --no-owner --clean --if-exists > "$f"
+                  gzip "$f"
+                  find /backups -name 'taskboard-*.sql.gz' -mtime +{{ .Values.backup.retentionDays }} -delete
+                  ls -lh /backups
+              volumeMounts:
+                - { name: backups, mountPath: /backups }
+          volumes:
+            - name: backups
+              persistentVolumeClaim:
+                claimName: {{ include "tb.name" . }}-backups
+{{- end }}

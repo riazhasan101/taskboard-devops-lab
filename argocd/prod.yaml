@@ -1,0 +1,41 @@
+# Prod is MANUAL sync on purpose: you review the diff in the UI and press Sync.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: taskboard-infra-prod
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/<apnar-github-username-lowercase>/taskboard-devops-lab.git
+    targetRevision: main
+    path: infra
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: taskboard-prod
+  syncPolicy:
+    syncOptions: [CreateNamespace=true, SkipDryRunOnMissingResource=true]
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: taskboard-prod
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/<apnar-github-username-lowercase>/taskboard-devops-lab.git
+    targetRevision: main
+    path: helm/taskboard
+    helm:
+      releaseName: taskboard
+      valueFiles: [values.yaml, values-prod.yaml]
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: taskboard-prod
+  syncPolicy:
+    syncOptions: [CreateNamespace=true]
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers: [/spec/replicas]

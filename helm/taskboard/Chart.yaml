@@ -1,0 +1,6 @@
+apiVersion: v2
+name: taskboard
+description: Taskboard sample app (React + Node + Postgres + Redis) for DevOps practice
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

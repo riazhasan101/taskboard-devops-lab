@@ -1,0 +1,49 @@
+# HA Postgres with the CloudNativePG operator (install the operator first, see ROADMAP phase 6).
+# 2 instances = 1 primary + 1 streaming replica, automatic failover (fits a 2-worker laptop cluster).
+# Use 3 on the 3-worker cluster or a real one.
+# Services created by the operator:  taskboard-pg-rw (primary), taskboard-pg-ro (replicas)
+# Secret created by the operator:    taskboard-pg-app  (key "uri" is used by the Helm chart)
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: taskboard-pg
+spec:
+  instances: 2
+  imageName: ghcr.io/cloudnative-pg/postgresql:17
+  storage:
+    size: 2Gi
+  bootstrap:
+    initdb:
+      database: taskboard
+      owner: app
+  affinity:
+    enablePodAntiAffinity: true
+    podAntiAffinityType: preferred   # use "required" on a real multi-node cluster
+    topologyKey: kubernetes.io/hostname
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 512Mi }
+
+  # Continuous WAL archiving + base backups to S3-compatible storage (MinIO here) => point-in-time recovery.
+  # NOTE: recent CNPG releases are moving this in-tree barmanObjectStore block to the "Barman Cloud Plugin".
+  # If your operator version warns about deprecation, follow the current CNPG docs for the plugin config.
+  backup:
+    retentionPolicy: "7d"
+    barmanObjectStore:
+      destinationPath: s3://pg-backups/
+      endpointURL: http://minio:9000
+      s3Credentials:
+        accessKeyId: { name: minio-creds, key: accessKey }
+        secretAccessKey: { name: minio-creds, key: secretKey }
+      wal: { compression: gzip }
+      data: { compression: gzip }
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: taskboard-pg-daily
+spec:
+  schedule: "0 0 1 * * *"      # 6-field cron (with seconds): every day 01:00:00
+  backupOwnerReference: self
+  cluster:
+    name: taskboard-pg

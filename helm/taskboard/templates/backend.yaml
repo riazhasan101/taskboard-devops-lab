@@ -1,0 +1,130 @@
+{{- $ctx := dict "root" . "component" "backend" -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "tb.name" . }}-backend
+  labels:
+    {{- include "tb.labels" . | nindent 4 }}
+    {{- include "tb.selector" $ctx | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.backend.replicas }}
+  {{- end }}
+  # Zero-downtime rolling update: never drop below desired capacity.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  selector:
+    matchLabels:
+      {{- include "tb.selector" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "tb.labels" . | nindent 8 }}
+        {{- include "tb.selector" $ctx | nindent 8 }}
+    spec:
+      terminationGracePeriodSeconds: 30
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile: { type: RuntimeDefault }
+      {{- include "tb.spread" $ctx | nindent 6 }}
+      containers:
+        - name: backend
+          image: "{{ .Values.image.prefix }}-backend:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - { name: http, containerPort: {{ .Values.backend.port }} }
+          env:
+            - { name: PORT, value: "{{ .Values.backend.port }}" }
+            - { name: APP_VERSION, value: "{{ .Values.image.tag | trunc 7 }}" }
+            - { name: SHUTDOWN_DELAY_MS, value: "{{ .Values.backend.shutdownDelayMs }}" }
+            - { name: REDIS_URL, value: {{ .Values.redis.url | quote }} }
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.database.existingSecret }}
+                  key: {{ .Values.database.secretKey }}
+          startupProbe:    # gives the pod up to 60s for DB wait + migration
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 5
+            failureThreshold: 2
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "tb.name" . }}-backend
+  labels:
+    {{- include "tb.labels" . | nindent 4 }}
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: /metrics
+    prometheus.io/port: "{{ .Values.backend.port }}"
+spec:
+  selector:
+    {{- include "tb.selector" $ctx | nindent 4 }}
+  ports:
+    - { name: http, port: {{ .Values.backend.port }}, targetPort: http }
+---
+{{- if .Values.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "tb.name" . }}-backend
+  labels:
+    {{- include "tb.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "tb.name" . }}-backend
+  minReplicas: {{ .Values.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.autoscaling.targetCPUUtilizationPercentage }}
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - { type: Pods, value: 2, periodSeconds: 30 }
+    scaleDown:
+      stabilizationWindowSeconds: {{ .Values.autoscaling.scaleDownStabilizationSeconds }}
+      policies:
+        - { type: Pods, value: 1, periodSeconds: 60 }
+---
+{{- end }}
+{{- if .Values.pdb.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "tb.name" . }}-backend
+  labels:
+    {{- include "tb.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "tb.selector" $ctx | nindent 6 }}
+{{- end }}

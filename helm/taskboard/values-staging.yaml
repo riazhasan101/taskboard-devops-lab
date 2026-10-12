@@ -1,0 +1,7 @@
+# CI rewrites image.tag below on every merge to main (see .github/workflows/ci.yml)
+image:
+  tag: "dev"
+backend:  { replicas: 2 }
+frontend: { replicas: 2 }
+autoscaling: { enabled: true, minReplicas: 2, maxReplicas: 5 }
+ingress: { host: taskboard-staging.localtest.me }

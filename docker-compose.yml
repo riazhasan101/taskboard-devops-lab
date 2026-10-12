@@ -1,0 +1,38 @@
+# Phase 1: whole stack on one machine.  docker compose up --build  ->  http://localhost:8080
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: taskboard
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d taskboard"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgres://app:app@postgres:5432/taskboard
+      REDIS_URL: redis://redis:6379
+      APP_VERSION: compose
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }
+    ports: ["3000:3000"]
+
+  frontend:
+    build: ./frontend
+    environment:
+      BACKEND_URL: http://backend:3000
+    depends_on: [backend]
+    ports: ["8080:8080"]
+
+volumes:
+  pgdata:

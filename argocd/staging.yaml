@@ -1,0 +1,46 @@
+# kubectl apply -n argocd -f argocd/staging.yaml
+# Replace repoURL with YOUR repo.  Staging auto-syncs; every merge to main (CI bumps the tag) deploys.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: taskboard-infra-staging
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/<apnar-github-username-lowercase>/taskboard-devops-lab.git
+    targetRevision: main
+    path: infra
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: taskboard-staging
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions:
+      - CreateNamespace=true
+      - SkipDryRunOnMissingResource=true   # CNPG CRDs may not exist on first dry-run
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: taskboard-staging
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/<apnar-github-username-lowercase>/taskboard-devops-lab.git
+    targetRevision: main
+    path: helm/taskboard
+    helm:
+      releaseName: taskboard
+      valueFiles: [values.yaml, values-staging.yaml]
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: taskboard-staging
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true]
+  ignoreDifferences:
+    - group: apps          # HPA owns replicas; don't fight it
+      kind: Deployment
+      jsonPointers: [/spec/replicas]

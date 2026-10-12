@@ -1,0 +1,59 @@
+image:
+  # CI pushes <prefix>-backend and <prefix>-frontend. Must be lowercase.
+  # CHANGE THIS to your GitHub user/repo (and make the GHCR packages public, or add imagePullSecrets).
+  prefix: ghcr.io/<apnar-github-username-lowercase>/taskboard-devops-lab
+  tag: dev
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+backend:
+  replicas: 2                # ignored when autoscaling.enabled
+  port: 3000
+  shutdownDelayMs: 5000      # time to fail readiness before closing, lets endpoints drain
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { memory: 256Mi }   # no CPU limit on purpose: avoids throttling; HPA scales on requests
+
+frontend:
+  replicas: 2
+  port: 8080
+  resources:
+    requests: { cpu: 50m, memory: 32Mi }
+    limits: { memory: 128Mi }
+
+database:
+  # Secret holding the connection string. CloudNativePG creates "<cluster>-app" with key "uri".
+  existingSecret: taskboard-pg-app
+  secretKey: uri
+
+redis:
+  url: redis://redis:6379
+
+ingress:
+  enabled: true
+  className: nginx
+  host: taskboard.localtest.me   # *.localtest.me resolves to 127.0.0.1, handy for kind
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+  scaleDownStabilizationSeconds: 60
+
+pdb:
+  enabled: true
+  minAvailable: 1
+
+# Spread replicas across nodes (and zones when nodes have the zone label).
+spread:
+  enabled: true
+
+# Logical backup (pg_dump -> PVC). Complements CNPG's physical backup / PITR in infra/.
+backup:
+  enabled: true
+  schedule: "0 2 * * *"
+  retentionDays: 7
+  storage: 2Gi
+  image: postgres:17-alpine   # keep >= server major version or pg_dump refuses
