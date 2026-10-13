@@ -43,6 +43,9 @@ spec:
             - { name: APP_VERSION, value: "{{ .Values.image.tag | trunc 7 }}" }
             - { name: SHUTDOWN_DELAY_MS, value: "{{ .Values.backend.shutdownDelayMs }}" }
             - { name: REDIS_URL, value: {{ .Values.redis.url | quote }} }
+              {{- range $k, $v := .Values.backend.extraEnv }}
+            - { name: {{ $k }}, value: {{ $v | quote }} }
+            {{- end }}
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
