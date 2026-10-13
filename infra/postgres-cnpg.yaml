@@ -3,6 +3,10 @@
 # Use 3 on the 3-worker cluster or a real one.
 # Services created by the operator:  taskboard-pg-rw (primary), taskboard-pg-ro (replicas)
 # Secret created by the operator:    taskboard-pg-app  (key "uri" is used by the Helm chart)
+#
+# Object-store backup / PITR (barmanObjectStore + ScheduledBackup) is intentionally NOT here yet.
+# It is added in ROADMAP phase 8, once an S3-compatible target is chosen
+# (MinIO community images are discontinued, so it is no longer a default choice).
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
@@ -23,27 +27,3 @@ spec:
   resources:
     requests: { cpu: 100m, memory: 256Mi }
     limits: { memory: 512Mi }
-
-  # Continuous WAL archiving + base backups to S3-compatible storage (MinIO here) => point-in-time recovery.
-  # NOTE: recent CNPG releases are moving this in-tree barmanObjectStore block to the "Barman Cloud Plugin".
-  # If your operator version warns about deprecation, follow the current CNPG docs for the plugin config.
-  backup:
-    retentionPolicy: "7d"
-    barmanObjectStore:
-      destinationPath: s3://pg-backups/
-      endpointURL: http://minio:9000
-      s3Credentials:
-        accessKeyId: { name: minio-creds, key: accessKey }
-        secretAccessKey: { name: minio-creds, key: secretKey }
-      wal: { compression: gzip }
-      data: { compression: gzip }
----
-apiVersion: postgresql.cnpg.io/v1
-kind: ScheduledBackup
-metadata:
-  name: taskboard-pg-daily
-spec:
-  schedule: "0 0 1 * * *"      # 6-field cron (with seconds): every day 01:00:00
-  backupOwnerReference: self
-  cluster:
-    name: taskboard-pg
