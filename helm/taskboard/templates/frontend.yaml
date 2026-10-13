@@ -25,6 +25,7 @@ spec:
       {{- end }}
       securityContext:
         runAsNonRoot: true
+        runAsUser: 101
         seccompProfile: { type: RuntimeDefault }
       {{- include "tb.spread" $ctx | nindent 6 }}
       containers:

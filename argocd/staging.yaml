@@ -8,7 +8,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/<apnar-github-username-lowercase>/taskboard-devops-lab.git
+    repoURL: https://github.com/riazhasan101/taskboard-devops-lab.git
     targetRevision: main
     path: infra
   destination:
@@ -28,7 +28,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/<apnar-github-username-lowercase>/taskboard-devops-lab.git
+    repoURL: https://github.com/riazhasan101/taskboard-devops-lab.git
     targetRevision: main
     path: helm/taskboard
     helm:

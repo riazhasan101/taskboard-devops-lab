@@ -1,7 +1,7 @@
 image:
   # CI pushes <prefix>-backend and <prefix>-frontend. Must be lowercase.
   # CHANGE THIS to your GitHub user/repo (and make the GHCR packages public, or add imagePullSecrets).
-  prefix: ghcr.io/<apnar-github-username-lowercase>/taskboard-devops-lab
+  prefix: ghcr.io/riazhasan101/taskboard-devops-lab
   tag: dev
   pullPolicy: IfNotPresent
 
