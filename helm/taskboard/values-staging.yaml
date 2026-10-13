@@ -1,6 +1,6 @@
 # CI rewrites image.tag below on every merge to main (see .github/workflows/ci.yml)
 image:
-  tag: "c4c74f400294f0ad8b824ecb4c963a13aa6f463c"
+  tag: "68a31b8d5cf30f8eb5f72ae9b0003ed8a02c1e93"
 backend:  { replicas: 2 }
 frontend: { replicas: 2 }
 autoscaling: { enabled: true, minReplicas: 2, maxReplicas: 5 }
